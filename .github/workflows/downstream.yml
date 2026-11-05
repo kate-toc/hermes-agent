@@ -56,10 +56,16 @@ jobs:
           --build-arg SOURCE_DISTANCE="$(git rev-list --count d923a5eb487a17c0a68801bba9ef0f56c81040a8..HEAD)"
           -t hermes-downstream:test .
       - name: Set up isolated Docker test interpreter
+        # A source checkout is not a packaged image. PM must not interpret the
+        # Docker install stamp here as a resident-runtime contract.
+        run: mv install-stamp.json "$RUNNER_TEMP/downstream-install-stamp.json"
+      - name: Provision isolated Docker test interpreter
         uses: ./.github/actions/setup-pm
         with:
           extras: '[]'
           test-environment: 'true'
+      - name: Restore image identity for integration comparisons
+        run: mv "$RUNNER_TEMP/downstream-install-stamp.json" install-stamp.json
       - name: Test candidate image without production mounts or credentials
         env:
           HERMES_TEST_IMAGE: hermes-downstream:test
