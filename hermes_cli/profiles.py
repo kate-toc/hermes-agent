@@ -1415,7 +1415,8 @@ def create_profile(
     # on every create and every 30 s, and ``_iter_named_profile_dirs`` only lists valid ids (no leading
     # dot), so it can never adopt the half-copied tree and start adapters on credentials the strip
     # below has not removed yet.
-    staging = _clone_staging_dir(profile_dir)
+    from hermes_cli.profile_provisioning import create_staging, provision_profile
+    staging = create_staging(profile_dir)
     try:
         if clone_all and source_dir:
             _clone_all_into(source_dir, staging, canon)
@@ -1427,6 +1428,7 @@ def create_profile(
             if stripped:
                 logger.info("profile %s: cloned without messaging channels %s", canon, stripped)
         _finish_profile_layout(staging, no_skills=no_skills, clone_all=clone_all, description=description)
+        provision_profile(canon, staging, profile_dir, _get_default_hermes_home(), source_dir)
         os.rename(staging, profile_dir)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
@@ -1440,18 +1442,6 @@ def create_profile(
     # rescans periodically, so a missed signal only delays serving).
     _notify_multiplexer(canon)
     return profile_dir
-
-
-def _clone_staging_dir(profile_dir: Path) -> Path:
-    """Fresh ``profiles/.<name>.staging-<pid>`` beside the final dir (same filesystem, so the publish
-    rename is atomic). A leftover from a crashed create is discarded."""
-    staging = profile_dir.parent / f".{profile_dir.name}.staging-{os.getpid()}"
-    profile_dir.parent.mkdir(parents=True, exist_ok=True)
-    if staging.is_symlink() or staging.is_file():
-        staging.unlink()
-    elif staging.is_dir():
-        shutil.rmtree(staging, ignore_errors=True)
-    return staging
 
 
 def _finish_profile_layout(profile_dir: Path, *, no_skills: bool, clone_all: bool,
