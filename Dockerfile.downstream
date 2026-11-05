@@ -7,8 +7,8 @@ LABEL org.opencontainers.image.source="https://github.com/kate-toc/hermes-agent"
       org.opencontainers.image.revision="${SOURCE_COMMIT}" \
       org.opencontainers.image.version="0.22.2-downstream"
 USER root
-COPY --chmod=0644 agent/agent_runtime_helpers.py /opt/hermes/agent/agent_runtime_helpers.py
-COPY --chmod=0644 hermes_cli/profiles.py hermes_cli/profile_provisioning.py hermes_cli/config_defaults.py /opt/hermes/hermes_cli/
+COPY agent/agent_runtime_helpers.py /opt/hermes/agent/agent_runtime_helpers.py
+COPY hermes_cli/profiles.py hermes_cli/profile_provisioning.py hermes_cli/config_defaults.py /opt/hermes/hermes_cli/
 RUN /opt/hermes/.venv/bin/python /opt/hermes/scripts/write_install_stamp.py --output /opt/hermes/install-stamp.json \
     --commit "${SOURCE_COMMIT}" --base-version 0.22.2 --distance "${SOURCE_DISTANCE}" \
     --source ci --distribution docker --update-mechanism external
