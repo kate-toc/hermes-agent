@@ -1,0 +1,15 @@
+# Thin source overlay on the exact deployed upstream release. Runtime and tooling
+# come from upstream's Dockerfile; no dependency or base-version upgrade is mixed in.
+FROM nousresearch/hermes-agent@sha256:36099926da316742423544e055d4734777105ffe6341873af5459b957d0c2919
+ARG SOURCE_COMMIT
+ARG SOURCE_DISTANCE=0
+LABEL org.opencontainers.image.source="https://github.com/kate-toc/hermes-agent" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.version="0.22.2-downstream"
+USER root
+COPY --chmod=0644 agent/agent_runtime_helpers.py /opt/hermes/agent/agent_runtime_helpers.py
+COPY --chmod=0644 hermes_cli/profiles.py hermes_cli/profile_provisioning.py hermes_cli/config_defaults.py /opt/hermes/hermes_cli/
+RUN /opt/hermes/.venv/bin/python /opt/hermes/scripts/write_install_stamp.py --output /opt/hermes/install-stamp.json \
+    --commit "${SOURCE_COMMIT}" --base-version 0.22.2 --distance "${SOURCE_DISTANCE}" \
+    --source ci --distribution docker --update-mechanism external
+RUN python3 -c 'import json, pathlib; p=pathlib.Path("/etc/hermes/image-provenance.json"); c=json.loads(p.read_text()); s=json.loads(pathlib.Path("/opt/hermes/install-stamp.json").read_text()); c.update(image="kate-toc/hermes-agent", revision=s["commit"]); p.write_text(json.dumps(c,sort_keys=True)+"\n"); p.chmod(0o444)'

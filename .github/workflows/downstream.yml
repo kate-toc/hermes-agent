@@ -1,0 +1,66 @@
+name: Downstream regression and image
+on:
+  push:
+    branches: ['kate/**']
+  pull_request:
+    branches: ['kate/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: downstream-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-pm
+        with:
+          extras: '[]'
+          test-environment: 'true'
+      - name: Blocking repository checks
+        run: python scripts/check --base d923a5eb487a17c0a68801bba9ef0f56c81040a8
+      - name: Offline regression tests
+        run: >-
+          scripts/run_tests.sh -j 2
+          tests/agent/test_colon_continuation.py tests/agent/test_stall_guards.py
+          tests/hermes_cli/test_profile_provisioning.py tests/hermes_cli/test_profiles.py
+  image:
+    needs: regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Write immutable source identity
+        run: >-
+          python scripts/write_install_stamp.py --output install-stamp.json
+          --commit "$GITHUB_SHA" --base-version 0.22.2
+          --distance "$(git rev-list --count d923a5eb487a17c0a68801bba9ef0f56c81040a8..HEAD)"
+          --source ci --distribution docker --update-mechanism external
+      - name: Reject profile data in build context
+        run: python scripts/ci/check_profile_archive_boundary.py
+      - name: Build pinned upstream source overlay
+        run: >-
+          docker build -f Dockerfile.downstream --build-arg SOURCE_COMMIT="$GITHUB_SHA"
+          --build-arg SOURCE_DISTANCE="$(git rev-list --count d923a5eb487a17c0a68801bba9ef0f56c81040a8..HEAD)"
+          -t hermes-downstream:test .
+      - name: Set up isolated Docker test interpreter
+        uses: ./.github/actions/setup-pm
+        with:
+          extras: '[]'
+          test-environment: 'true'
+      - name: Test candidate image without production mounts or credentials
+        env:
+          HERMES_TEST_IMAGE: hermes-downstream:test
+        run: scripts/run_tests.sh -j 2 tests/docker/
