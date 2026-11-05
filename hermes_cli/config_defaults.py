@@ -1,7 +1,5 @@
-"""Default configuration data for Hermes Agent: DEFAULT_CONFIG and OPTIONAL_ENV_VARS.
-
-Pure-data leaf module — must not import from hermes_cli.config. Comments are the user-facing
-docs of config.yaml.
+"""DEFAULT_CONFIG and OPTIONAL_ENV_VARS; comments document config.yaml for users.
+Pure-data leaf module — must not import from hermes_cli.config.
 """
 
 from hermes_cli.config_defaults_auxiliary import _aux
@@ -19,6 +17,8 @@ LEGACY_VERCEL_RUNTIME = "node24"  # the seeded pre-49 default, never a user choi
 
 
 DEFAULT_CONFIG = {
+    # Trusted operator argv, run on the hidden profile tree before atomic publication.
+    "profiles": {"provision_command": [], "provision_timeout": 60},
     "model": "",
     "providers": {},
     "fallback_providers": [],
