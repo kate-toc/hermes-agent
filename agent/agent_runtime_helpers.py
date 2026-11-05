@@ -3429,11 +3429,11 @@ _TRAILING_CONTINUE_INTENT_MAX_CHARS = 400
 
 
 def trailing_continue_intent(text: str) -> bool:
-    """Whether ``text`` is a short reply ENDING on an announced next action (stall-guard re-prompt trigger)."""
+    """Whether a reply ends in a colon (any length) or a short announced next action."""
     t = (text or "").strip()
-    if not t or len(t) > _TRAILING_CONTINUE_INTENT_MAX_CHARS:
-        return False
-    return bool(_TRAILING_CONTINUE_INTENT_RE.search(t[-160:]))
+    return t.endswith(":") or (
+        len(t) <= _TRAILING_CONTINUE_INTENT_MAX_CHARS and bool(_TRAILING_CONTINUE_INTENT_RE.search(t[-160:]))
+    )
 
 
 # Broader tail detector for PROMOTED REASONING only (reasoning-only clean stop with tools offered
