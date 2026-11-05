@@ -12,4 +12,5 @@ COPY hermes_cli/profiles.py hermes_cli/profile_provisioning.py hermes_cli/config
 RUN /opt/hermes/.venv/bin/python /opt/hermes/scripts/write_install_stamp.py --output /opt/hermes/install-stamp.json \
     --commit "${SOURCE_COMMIT}" --base-version 0.22.2 --distance "${SOURCE_DISTANCE}" \
     --source ci --distribution docker --update-mechanism external
-RUN python3 -c 'import json, pathlib; p=pathlib.Path("/etc/hermes/image-provenance.json"); c=json.loads(p.read_text()); s=json.loads(pathlib.Path("/opt/hermes/install-stamp.json").read_text()); c.update(image="kate-toc/hermes-agent", revision=s["commit"]); p.write_text(json.dumps(c,sort_keys=True)+"\n"); p.chmod(0o444)'
+RUN python3 -c 'import json, pathlib; stamp=pathlib.Path("/opt/hermes/install-stamp.json"); s=json.loads(stamp.read_text()); s["pmRuntime"]="/opt/hermes/pm-runtime"; stamp.write_text(json.dumps(s)+"\n"); p=pathlib.Path("/etc/hermes/image-provenance.json"); c=json.loads(p.read_text()); c.update(image="kate-toc/hermes-agent", revision=s["commit"]); p.write_text(json.dumps(c,sort_keys=True)+"\n"); p.chmod(0o444)' \
+    && /opt/hermes/.venv/bin/python -c 'from pm.runtime import _resident_runtime; assert _resident_runtime() is not None'
