@@ -1392,8 +1392,7 @@ def create_profile(
     # on every create and every 30 s, and ``_iter_named_profile_dirs`` only lists valid ids (no leading
     # dot), so it can never adopt the half-copied tree and start adapters on credentials the strip
     # below has not removed yet.
-    from hermes_cli.profiles_initialization import clone_staging_dir, discard_unpublished_vault_key, finish_profile_layout
-    from hermes_cli.profile_provisioning import provision_profile
+    from hermes_cli.profiles_initialization import clone_staging_dir, discard_unpublished_vault_key, finish_profile_layout, publish_profile
     staging = clone_staging_dir(profile_dir)
     clone_key = None  # the keychain entry made for this clone's vault, if any
     try:
@@ -1407,8 +1406,7 @@ def create_profile(
             if stripped:
                 logger.info("profile %s: cloned without messaging channels %s", canon, stripped)
         finish_profile_layout(staging, no_skills=no_skills, clone_all=clone_all, description=description, soul=soul)
-        provision_profile(canon, staging, profile_dir, _get_default_hermes_home(), source_dir)
-        os.rename(staging, profile_dir)
+        publish_profile(canon, staging, profile_dir, _get_default_hermes_home(), source_dir)
     except BaseException:
         discard_unpublished_vault_key(clone_key)
         shutil.rmtree(staging, ignore_errors=True)

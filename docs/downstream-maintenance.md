@@ -1,7 +1,7 @@
 # Thin downstream maintenance
 
-The `kate/stable-v0.22.2` branch starts at upstream release commit
-`d923a5eb487a17c0a68801bba9ef0f56c81040a8`. Upstream `main` remains an unmodified
+The prepare-only `kate/candidate-v0.23.0` branch starts at upstream release commit
+`2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`. Production remains on `kate/stable-v0.22.2`. Upstream `main` remains an unmodified
 tracking branch; do not merge it into stable just to move workflow files.
 
 ## Local patches
@@ -51,3 +51,9 @@ backup; preserve runtime config and secrets; deploy by immutable digest; verify
 authentication, tools, supervision and state integrity. Keep the previous image
 and compatible backup. Retire startup patching only after verifying the built-in
 behavior. Never restore state over live writers.
+
+## v0.23.0 compatibility review
+
+The profile patch preserves upstream initialization, SOUL content, clone vault-key cleanup, and memory-provider notifications. Provisioning runs inside the staging/publication helper before atomic rename. The overlay includes the initialization sibling. The upstream image digest is independently hashed and its install stamp matches the exact release commit/version; its legacy image-provenance version is 0.0.0, so install-stamp identity is authoritative.
+
+Release notes remove legacy browser tools in favor of browser_exec, move MCP serving to the mcp-serve plugin, and add opt-in Webapp/plugin updates/compaction features. Do not enable these or migrate production configuration during preparation. Security notes cover redaction, approval state, URL/A2A checks and unattended shell-hook handling.
