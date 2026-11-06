@@ -66,3 +66,12 @@ def finish_profile_layout(profile_dir: Path, *, no_skills: bool, clone_all: bool
     if description and description.strip():
         with contextlib.suppress(Exception):  # non-fatal — `hermes profile describe` works later
             write_profile_meta(profile_dir, description=description.strip(), description_auto=False)
+
+
+def publish_profile(name: str, staging: Path, destination: Path,
+                    default_home: Path, source: Optional[Path]) -> None:
+    """Finish operator provisioning before the atomic visibility boundary."""
+    from hermes_cli.profile_provisioning import provision_profile
+
+    provision_profile(name, staging, destination, default_home, source)
+    os.rename(staging, destination)
