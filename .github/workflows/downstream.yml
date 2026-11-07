@@ -196,7 +196,7 @@ jobs:
           if gh release view "$release_ref" > /dev/null 2> release-view.err; then
             gh release upload "$release_ref" release.json --clobber
           elif grep -qi 'release not found\|HTTP 404' release-view.err; then
-            gh release create "$release_ref" release.json --verify-tag --title "Hermes downstream $RELEASE_TAG" --notes-file release-notes.md --latest=false
+            gh release create "$release_ref" release.json --verify-tag --target "$GITHUB_SHA" --title "Hermes downstream $RELEASE_TAG" --notes-file release-notes.md --latest=false
           else
             cat release-view.err; exit 1
           fi
