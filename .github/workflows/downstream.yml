@@ -5,11 +5,16 @@ on:
   pull_request:
     branches: ['kate/**']
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Upstream version tag to publish (empty = tests only)'
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
   group: downstream-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 jobs:
   regression:
     runs-on: ubuntu-latest
@@ -42,6 +47,16 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.14'
+      - name: Validate requested release against the pinned upstream source
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          version="${RELEASE_TAG#v}"
+          grep -Fq "org.opencontainers.image.version=\"${version}-downstream\"" Dockerfile.downstream
+          git merge-base --is-ancestor "refs/tags/$RELEASE_TAG^{commit}" "$GITHUB_SHA"
       - name: Write immutable source identity
         run: >-
           python scripts/write_install_stamp.py --output install-stamp.json
@@ -74,3 +89,116 @@ jobs:
         env:
           HERMES_TEST_IMAGE: hermes-downstream:test
         run: scripts/run_tests.sh -j 2 tests/docker/
+      - name: Archive the exact tested image for publication (no rebuild)
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        run: |
+          set -euo pipefail
+          mkdir -p release-image
+          docker image inspect hermes-downstream:test --format '{{.Id}}' > release-image/image-id.txt
+          docker save hermes-downstream:test | zstd -T0 -3 > release-image/image.tar.zst
+          (cd release-image && sha256sum image.tar.zst > image.tar.zst.sha256)
+      - name: Retain the tested release image
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: downstream-release-image
+          path: release-image/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+  publish:
+    needs: image
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && github.repository == 'kate-toc/hermes-agent'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      packages: write
+    concurrency:
+      group: downstream-release-${{ inputs.release_tag }}
+      cancel-in-progress: false
+    env:
+      IMAGE: ghcr.io/kate-toc/hermes-agent
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: downstream-release-image
+          path: release-image
+      - name: Verify and load the exact tested artifact
+        run: |
+          set -euo pipefail
+          (cd release-image && sha256sum --check image.tar.zst.sha256)
+          zstd -dc release-image/image.tar.zst | docker load
+          test "$(docker image inspect hermes-downstream:test --format '{{.Id}}')" = "$(cat release-image/image-id.txt)"
+          test "$(docker image inspect hermes-downstream:test --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$GITHUB_SHA"
+      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish immutable upstream-matching version tags
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          tags=("$RELEASE_TAG" "$version" "sha-$GITHUB_SHA")
+          expected_id="$(cat release-image/image-id.txt)"
+          # Check ALL targets before mutation. Existing versions must never be replaced.
+          for tag in "${tags[@]}"; do
+            if docker manifest inspect "$IMAGE:$tag" > existing.json 2> existing.err; then
+              test "$(jq -r '.config.digest' existing.json)" = "$expected_id" || {
+                echo '::error::Existing release tag identifies a different image; refusing overwrite'; exit 1;
+              }
+            elif ! grep -Eqi 'manifest unknown|name unknown|no such manifest|not found' existing.err; then
+              cat existing.err; exit 1
+            fi
+          done
+          for tag in "${tags[@]}"; do
+            docker tag hermes-downstream:test "$IMAGE:$tag"
+            docker push "$IMAGE:$tag"
+          done
+          docker manifest inspect --verbose "$IMAGE:$RELEASE_TAG" > published.json
+          test "$(jq -r '.SchemaV2Manifest.config.digest' published.json)" = "$expected_id"
+          digest="$(jq -r '.Descriptor.digest' published.json)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          for tag in "${tags[@]}"; do
+            test "$(docker manifest inspect --verbose "$IMAGE:$tag" | jq -r '.Descriptor.digest')" = "$digest"
+          done
+          jq -n --arg upstream_tag "$RELEASE_TAG" --arg source_commit "$GITHUB_SHA" \
+            --arg image "$IMAGE" --arg digest "$digest" --arg image_id "$expected_id" \
+            --arg run "https://github.com/$GH_REPO/actions/runs/$GITHUB_RUN_ID" \
+            '{upstream_tag:$upstream_tag,source_commit:$source_commit,image:$image,digest:$digest,image_id:$image_id,architecture:"amd64",ci_url:$run,production_changed:false}' > release.json
+          {
+            echo "Hermes downstream build of upstream $RELEASE_TAG (linux/amd64)."
+            echo
+            echo "Pull: $IMAGE:$RELEASE_TAG"
+            echo "Immutable image: $IMAGE@$digest"
+            echo "Source: $GITHUB_SHA"
+            echo "Tests: https://github.com/$GH_REPO/actions/runs/$GITHUB_RUN_ID"
+            echo
+            echo 'Includes downstream colon-continuation and profile-provisioning patches.'
+            echo 'Production was not deployed. Configuration/plugin migration and production acceptance remain separate.'
+            echo 'Upstream source tags are preserved; this downstream release uses its own Git tag.'
+          } > release-notes.md
+          cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Release the downstream commit and digest receipt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          release_ref="downstream/$RELEASE_TAG"
+          if gh api "repos/$GH_REPO/git/ref/tags/$release_ref" > release-ref.json 2> release-ref.err; then
+            test "$(jq -r '.object.sha' release-ref.json)" = "$GITHUB_SHA"
+          elif grep -q 'HTTP 404' release-ref.err; then
+            gh api --method POST "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$release_ref" -f "sha=$GITHUB_SHA" > /dev/null
+          else
+            cat release-ref.err; exit 1
+          fi
+          if gh release view "$release_ref" > /dev/null 2> release-view.err; then
+            gh release upload "$release_ref" release.json --clobber
+          elif grep -qi 'release not found\|HTTP 404' release-view.err; then
+            gh release create "$release_ref" release.json --verify-tag --title "Hermes downstream $RELEASE_TAG" --notes-file release-notes.md --latest=false
+          else
+            cat release-view.err; exit 1
+          fi
