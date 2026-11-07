@@ -57,3 +57,26 @@ behavior. Never restore state over live writers.
 The profile patch preserves upstream initialization, SOUL content, clone vault-key cleanup, and memory-provider notifications. Provisioning runs inside the staging/publication helper before atomic rename. The overlay includes the initialization sibling. The upstream image digest is independently hashed and its install stamp matches the exact release commit/version; its legacy image-provenance version is 0.0.0, so install-stamp identity is authoritative.
 
 Release notes remove legacy browser tools in favor of browser_exec, move MCP serving to the mcp-serve plugin, and add opt-in Webapp/plugin updates/compaction features. Do not enable these or migrate production configuration during preparation. Security notes cover redaction, approval state, URL/A2A checks and unattended shell-hook handling.
+
+## GHCR release publication (authorized 2026-11-08)
+
+After source review, dispatch `downstream.yml` on the reviewed downstream branch
+with `release_tag` set to the exact upstream stable tag (for example `v0.23.0`).
+An empty input or ordinary branch/PR CI is tests-only and has no publication job.
+The workflow validates version and upstream ancestry, runs regressions and Docker
+integration tests, archives the exact tested linux/amd64 image, then loads it in a
+separate publication job. No publication rebuild occurs. The archive is retained
+for seven days; GHCR is the durable release artifact.
+
+Images: `ghcr.io/kate-toc/hermes-agent:<upstream-tag>`, the same version without
+`v`, and `sha-<full-downstream-commit>`. Version tags are immutable: a differing
+existing image fails closed. No moving latest/stable aliases are published.
+The GitHub release `downstream/<upstream-tag>` points to our patched commit and
+attaches `release.json` with the registry digest, image ID, source and CI run.
+Inherited upstream Git tags remain untouched (they identify upstream source,
+not the patched downstream image). Only the downstream workflow is enabled;
+upstream publication and paid runners remain disabled.
+
+Verify GHCR visibility and an anonymous pull by immutable digest before accepting
+a release. Never substitute a local Docker image ID for the registry digest.
+Image publication is not production promotion; all production gates above remain.
