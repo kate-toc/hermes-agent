@@ -51,3 +51,26 @@ backup; preserve runtime config and secrets; deploy by immutable digest; verify
 authentication, tools, supervision and state integrity. Keep the previous image
 and compatible backup. Retire startup patching only after verifying the built-in
 behavior. Never restore state over live writers.
+
+## GHCR release publication (authorized 2026-11-08)
+
+After source review, dispatch `downstream.yml` on the reviewed downstream branch
+with `release_tag` set to the exact upstream stable tag (for example `v0.23.0`).
+An empty input or ordinary branch/PR CI is tests-only and has no publication job.
+The workflow validates version and upstream ancestry, runs regressions and Docker
+integration tests, archives the exact tested linux/amd64 image, then loads it in a
+separate publication job. No publication rebuild occurs. The archive is retained
+for seven days; GHCR is the durable release artifact.
+
+Images: `ghcr.io/kate-toc/hermes-agent:<upstream-tag>`, the same version without
+`v`, and `sha-<full-downstream-commit>`. Version tags are immutable: a differing
+existing image fails closed. No moving latest/stable aliases are published.
+The GitHub release `downstream/<upstream-tag>` points to our patched commit and
+attaches `release.json` with the registry digest, image ID, source and CI run.
+Inherited upstream Git tags remain untouched (they identify upstream source,
+not the patched downstream image). Only the downstream workflow is enabled;
+upstream publication and paid runners remain disabled.
+
+Verify GHCR visibility and an anonymous pull by immutable digest before accepting
+a release. Never substitute a local Docker image ID for the registry digest.
+Image publication is not production promotion; all production gates above remain.
