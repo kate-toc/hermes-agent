@@ -74,3 +74,12 @@ upstream publication and paid runners remain disabled.
 Verify GHCR visibility and an anonymous pull by immutable digest before accepting
 a release. Never substitute a local Docker image ID for the registry digest.
 Image publication is not production promotion; all production gates above remain.
+
+Docker containerd-backed stores may identify the image by its OCI index digest,
+not the config digest. Registry verification must support both OCI indexes and
+single-image manifests; `docker manifest inspect --verbose` is an array for an
+index. Use Buildx's root manifest digest rather than indexing that array as an
+object. If publication succeeds but later receipt verification fails, reconcile
+registry tags and source identity before retrying. A failed Actions run alone is
+not proof that a registry push failed. Rerun only failed publication jobs while
+the tested artifact remains available; never rebuild just to repair a receipt.

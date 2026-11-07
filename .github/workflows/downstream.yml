@@ -142,8 +142,10 @@ jobs:
           expected_id="$(cat release-image/image-id.txt)"
           # Check ALL targets before mutation. Existing versions must never be replaced.
           for tag in "${tags[@]}"; do
-            if docker manifest inspect "$IMAGE:$tag" > existing.json 2> existing.err; then
-              test "$(jq -r '.config.digest' existing.json)" = "$expected_id" || {
+            if docker buildx imagetools inspect "$IMAGE:$tag" --raw > existing.json 2> existing.err; then
+              existing_digest="$(docker buildx imagetools inspect "$IMAGE:$tag" --format '{{.Manifest.Digest}}')"
+              # Classic Docker IDs are config digests; containerd IDs can be OCI index digests.
+              test "$existing_digest" = "$expected_id" || test "$(jq -r '.config.digest // empty' existing.json)" = "$expected_id" || {
                 echo '::error::Existing release tag identifies a different image; refusing overwrite'; exit 1;
               }
             elif ! grep -Eqi 'manifest unknown|name unknown|no such manifest|not found' existing.err; then
@@ -154,12 +156,12 @@ jobs:
             docker tag hermes-downstream:test "$IMAGE:$tag"
             docker push "$IMAGE:$tag"
           done
-          docker manifest inspect --verbose "$IMAGE:$RELEASE_TAG" > published.json
-          test "$(jq -r '.SchemaV2Manifest.config.digest' published.json)" = "$expected_id"
-          digest="$(jq -r '.Descriptor.digest' published.json)"
+          docker buildx imagetools inspect "$IMAGE:$RELEASE_TAG" --raw > published.json
+          digest="$(docker buildx imagetools inspect "$IMAGE:$RELEASE_TAG" --format '{{.Manifest.Digest}}')"
+          test "$digest" = "$expected_id" || test "$(jq -r '.config.digest // empty' published.json)" = "$expected_id"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           for tag in "${tags[@]}"; do
-            test "$(docker manifest inspect --verbose "$IMAGE:$tag" | jq -r '.Descriptor.digest')" = "$digest"
+            test "$(docker buildx imagetools inspect "$IMAGE:$tag" --format '{{.Manifest.Digest}}')" = "$digest"
           done
           jq -n --arg upstream_tag "$RELEASE_TAG" --arg source_commit "$GITHUB_SHA" \
             --arg image "$IMAGE" --arg digest "$digest" --arg image_id "$expected_id" \
