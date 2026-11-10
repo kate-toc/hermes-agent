@@ -1,7 +1,7 @@
 # Thin downstream maintenance
 
-The prepare-only `kate/candidate-v0.23.0` branch starts at upstream release commit
-`2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`. Production remains on `kate/stable-v0.22.2`. Upstream `main` remains an unmodified
+The release `kate/candidate-v0.23.1` branch starts at upstream release commit
+`3b421578588243f920886e6fe79a6faa87ea026e`. Publication does not change production. Upstream `main` remains an unmodified
 tracking branch; do not merge it into stable just to move workflow files.
 
 ## Local patches
@@ -52,7 +52,7 @@ authentication, tools, supervision and state integrity. Keep the previous image
 and compatible backup. Retire startup patching only after verifying the built-in
 behavior. Never restore state over live writers.
 
-## v0.23.0 compatibility review
+## Prior v0.23.0 compatibility review
 
 The profile patch preserves upstream initialization, SOUL content, clone vault-key cleanup, and memory-provider notifications. Provisioning runs inside the staging/publication helper before atomic rename. The overlay includes the initialization sibling. The upstream image digest is independently hashed and its install stamp matches the exact release commit/version; its legacy image-provenance version is 0.0.0, so install-stamp identity is authoritative.
 
@@ -61,7 +61,7 @@ Release notes remove legacy browser tools in favor of browser_exec, move MCP ser
 ## GHCR release publication (authorized 2026-11-08)
 
 After source review, dispatch `downstream.yml` on the reviewed downstream branch
-with `release_tag` set to the exact upstream stable tag (for example `v0.23.0`).
+with `release_tag` set to the exact upstream stable tag (for example `v0.23.1`).
 An empty input or ordinary branch/PR CI is tests-only and has no publication job.
 The workflow validates version and upstream ancestry, runs regressions and Docker
 integration tests, archives the exact tested linux/amd64 image, then loads it in a
@@ -89,3 +89,13 @@ object. If publication succeeds but later receipt verification fails, reconcile
 registry tags and source identity before retrying. A failed Actions run alone is
 not proof that a registry push failed. Rerun only failed publication jobs while
 the tested artifact remains available; never rebuild just to repair a receipt.
+
+## v0.23.1 compatibility review
+
+Exact upstream source: 3b421578588243f920886e6fe79a6faa87ea026e. All thin
+downstream commits cherry-picked without conflicts. Upstream profile gateway
+credential-store scrubbing and memory-provider alias validation are retained.
+The pinned upstream image install stamp matches this commit and version.
+The plugin catalog cap increases to 16 MiB; config schema is 53. No plugin
+or configuration migration or production activation is part of publication.
+The canonical release run also performs an anonymous GHCR pull.

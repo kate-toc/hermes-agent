@@ -29,12 +29,14 @@ jobs:
           extras: '[]'
           test-environment: 'true'
       - name: Blocking repository checks
-        run: python scripts/check --base 2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19
+        run: python scripts/check --base 3b421578588243f920886e6fe79a6faa87ea026e
       - name: Offline regression tests
         run: >-
           scripts/run_tests.sh -j 2
           tests/agent/test_colon_continuation.py tests/agent/test_stall_guards.py
           tests/hermes_cli/test_profile_provisioning.py tests/hermes_cli/test_profiles.py
+          tests/hermes_cli/test_profiles_memory_hooks.py tests/hermes_cli/test_web_profile_soul_writes.py
+          tests/hermes_cli/test_profile_clone_channels.py tests/hermes_cli/test_profile_gateway_connection_stores.py
   image:
     needs: regression
     runs-on: ubuntu-latest
@@ -60,15 +62,15 @@ jobs:
       - name: Write immutable source identity
         run: >-
           python scripts/write_install_stamp.py --output install-stamp.json
-          --commit "$GITHUB_SHA" --base-version 0.23.0
-          --distance "$(git rev-list --count 2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19..HEAD)"
+          --commit "$GITHUB_SHA" --base-version 0.23.1
+          --distance "$(git rev-list --count 3b421578588243f920886e6fe79a6faa87ea026e..HEAD)"
           --source ci --distribution docker --update-mechanism external
       - name: Reject profile data in build context
         run: python scripts/ci/check_profile_archive_boundary.py
       - name: Build pinned upstream source overlay
         run: >-
           docker build -f Dockerfile.downstream --build-arg SOURCE_COMMIT="$GITHUB_SHA"
-          --build-arg SOURCE_DISTANCE="$(git rev-list --count 2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19..HEAD)"
+          --build-arg SOURCE_DISTANCE="$(git rev-list --count 3b421578588243f920886e6fe79a6faa87ea026e..HEAD)"
           -t hermes-downstream:test .
       - name: Record immutable candidate image identity
         run: >-
@@ -184,6 +186,11 @@ jobs:
             echo 'Upstream source tags are preserved; this downstream release uses its own Git tag.'
           } > release-notes.md
           cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify anonymous registry pull of the tested release
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/anonymous-ghcr"
+          docker --config "$RUNNER_TEMP/anonymous-ghcr" pull "$IMAGE:$RELEASE_TAG"
       - name: Release the downstream commit and digest receipt
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
